@@ -1,0 +1,120 @@
+import scipy as sci
+import matplotlib.pyplot as plt
+import mpl_toolkits.mplot3d.axes3d as p3
+import matplotlib.animation as animation
+import numpy as numpy
+import scipy.integrate
+
+# Define universal gravitation constant
+G = 6.67408e-11  # N-m2/kg2
+# Reference quantities
+m_nd = 1.989e+30  # kg #mass of the sun
+r_nd = 5.326e+12  # m #distance between stars in Alpha Centauri
+v_nd = 30000  # m/s #relative velocity of earth around the sun
+t_nd = 79.91 * 365 * 24 * 3600 * 0.51  # s #orbital period of Alpha Centauri
+# Net constants
+K1 = G * t_nd * m_nd / (r_nd ** 2 * v_nd)
+K2 = v_nd * t_nd / r_nd
+
+# Define masses (in solar units
+m1 = 1.1  # star A
+m2 = 0.907  # star B
+m3 = 1.0 # star C
+m4 = 0.00005 # planet D
+# Define initial position vectors
+r1 = [0.5, -1, 0]  # m
+r2 = [0.5, 0, 0]  # m
+r3 = [0,1,0] #m
+r4 = [0,0.5,0] #m
+# Convert pos vectors to arrays
+r1 = numpy.array(r1, dtype="float64")
+r2 = numpy.array(r2, dtype="float64")
+r3 = numpy.array(r3,dtype="float64")
+r4 = numpy.array(r4,dtype="float64")
+# Define initial velocities
+v1 = [0.01, 0.01, 0]  # m/s
+v2 = [-0.05, 0, -0.1]  # m/s
+v3 = [0,-0.01,0]
+v4 = [0,0,0]
+# Convert velocity vectors to arrays
+v1 = numpy.array(v1, dtype="float64")
+v2 = numpy.array(v2, dtype="float64")
+v3 = numpy.array(v3,dtype="float64")
+v4 = numpy.array(v4,dtype="float64")
+
+#Update COM formula
+r_com=(m1*r1+m2*r2+m3*r3+m4*r4)/(m1+m2+m3+m4)
+#Update velocity of COM formula
+v_com=(m1*v1+m2*v2+m3*v3+m4*v4)/(m1+m2+m3+m4)
+
+def FourBodyEquations(w, t, G, m1, m2, m3, m4):
+    r1 = w[:3]
+    r2 = w[3:6]
+    r3 = w[6:9]
+    r4 = w[9:12]
+    v1 = w[12:15]
+    v2 = w[15:18]
+    v3 = w[18:21]
+    v4 = w[21:24]
+    r12 = sci.linalg.norm(r2 - r1)
+    r13 = sci.linalg.norm(r3 - r1)
+    r23 = sci.linalg.norm(r3 - r2)
+    r14 = sci.linalg.norm(r4 - r1)
+    r24 = sci.linalg.norm(r4 - r2)
+    r34 = sci.linalg.norm(r4 - r3)
+
+    dv1bydt = K1 * m2 * (r2 - r1) / r12 ** 3 + K1 * m3 * (r3 - r1) / r13 ** 3 + K1 * m4 * (r4 - r1) / r14 ** 3
+    dv2bydt = K1 * m1 * (r1 - r2) / r12 ** 3 + K1 * m3 * (r3 - r2) / r23 ** 3 + K1 * m4 * (r4 - r2) / r24 ** 3
+    dv3bydt = K1 * m1 * (r1 - r3) / r13 ** 3 + K1 * m2 * (r2 - r3) / r23 ** 3 + K1 * m4 * (r4 - r3) / r34 ** 3
+    dv4bydt = K1 * m1 * (r1 - r4) / r14 ** 3 + K1 * m2 * (r2 - r4) / r24 ** 3 + K1 * m4 * (r4 - r3) / r34 ** 3
+    dr1bydt = K2 * v1
+    dr2bydt = K2 * v2
+    dr3bydt = K2 * v3
+    dr4bydt = K2 * v4
+
+    r12_derivs = numpy.concatenate((dr1bydt, dr2bydt))
+    r13_derivs = numpy.concatenate((r12_derivs, dr3bydt))
+    r_derivs = numpy.concatenate((r13_derivs, dr4bydt))
+    v12_derivs = numpy.concatenate((dv1bydt, dv2bydt))
+    v13_derivs = numpy.concatenate((v12_derivs, dv3bydt))
+    v_derivs = numpy.concatenate((v13_derivs, dv4bydt))
+    derivs = numpy.concatenate((r_derivs, v_derivs))
+
+    return derivs
+
+#Package initial parameters
+init_params=numpy.array([r1,r2,r3,r4,v1,v2,v3,v4]) #Initial parameters
+init_params=init_params.flatten() #Flatten to make 1D array
+time_span=numpy.linspace(0,15,750) #15 orbital periods and 750 points
+#Run the ODE solver
+import scipy.integrate
+four_body_sol=sci.integrate.odeint(FourBodyEquations,init_params,time_span,args=(G,m1,m2,m3,m4))
+
+r1_sol=four_body_sol[:,:3]
+r2_sol=four_body_sol[:,3:6]
+r3_sol=four_body_sol[:,6:9]
+r4_sol=four_body_sol[:,9:12]
+
+# Create figure
+fig = plt.figure(figsize=(7, 7))
+# Create 3D axes
+ax = fig.add_subplot(111, projection="3d")
+# Plot the orbits
+ax.plot(r1_sol[:, 0], r1_sol[:, 1], r1_sol[:, 2], color="darkblue")
+ax.plot(r2_sol[:, 0], r2_sol[:, 1], r2_sol[:, 2], color="tab:red")
+ax.plot(r3_sol[:, 0], r3_sol[:, 1], r3_sol[:, 2], color="green")
+ax.plot(r4_sol[:, 0], r4_sol[:, 1], r4_sol[:, 2], color="black")
+# Plot the final positions of the stars
+ax.scatter(r1_sol[-1, 0], r1_sol[-1, 1], r1_sol[-1, 2], color="darkblue", marker="o", s=100, label="Star A")
+ax.scatter(r2_sol[-1, 0], r2_sol[-1, 1], r2_sol[-1, 2], color="tab:red", marker="o", s=100, label="Star B")
+ax.scatter(r3_sol[-1, 0], r3_sol[-1, 1], r3_sol[-1, 2], color="tab:green", marker="o", s=100, label="Star C")
+ax.scatter(r4_sol[-1, 0], r4_sol[-1, 1], r4_sol[-1, 2], color="black", marker="o", s=100, label="Planet D")
+# Add a few more bells and whistles
+ax.set_xlabel("x-coordinate", fontsize=14)
+ax.set_ylabel("y-coordinate", fontsize=14)
+ax.set_zlabel("z-coordinate", fontsize=14)
+ax.set_title("Four-body system orbit visualization - 15 periods\n", fontsize=14)
+ax.legend(loc="upper left", fontsize=14)
+
+
+plt.show()
